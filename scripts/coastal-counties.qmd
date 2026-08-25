@@ -1,0 +1,820 @@
+---
+title: "2024 Processors Coastal Counties"
+date: last-modified
+execute: 
+  warning: false
+  message: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    toc: true
+editor_options: 
+  
+  chunk_output_type: console
+---
+
+# Setup
+
+### Libraries
+
+```{r}
+library(tidyverse)
+library(here)
+library(janitor)
+library(sf)
+library(viridis)
+library(tigris)
+library(kableExtra)
+library(knitr)
+library(readxl)
+library(leaflet)
+
+options(tigris_use_cache = TRUE)
+```
+
+### Data
+
+```{r}
+# Projection for the contiguous U.S.
+crs_conus <- "ESRI:102003"
+
+processors <- read_csv(
+  here("data/cleaned/states-2024-streetgeo/active-processors-2024-streetgeo.csv")
+)
+
+coastal_counties <- st_read(
+  here("data/raw/coastal_counties/enow_counties.shp")
+) %>%
+  clean_names() %>%
+  mutate(
+    geoid   = str_pad(as.character(geoid), 5, pad = "0"),
+    statefp = str_pad(as.character(statefp), 2, pad = "0")
+  ) %>%
+  st_transform(crs_conus)
+
+
+products_24 <- read_excel(here("data/raw/pp_2024/PPS1999to2024.xlsx")) %>% 
+  clean_names() %>% 
+  filter(year == 2024)
+
+
+products <- read_excel(here("data/raw/pp_2024/pp_names__1.xlsx")) %>% clean_names() 
+```
+
+
+```{r}
+product_names <- products %>%
+  clean_names() %>%
+  mutate(
+    
+    # Product processing type
+    type = case_when(
+      str_detect(pp_dscp, "FILLET") ~ "FILLET",
+      str_detect(pp_dscp, "SURIMI") ~ "SURIMI",
+      str_detect(pp_dscp, "BREADED") ~ "BREADED",
+      str_detect(pp_dscp, "DRESSED") ~ "DRESSED",
+      str_detect(pp_dscp, "CANNED") ~ "CANNED",
+      str_detect(pp_dscp, "ROE|CAVIAR") ~ "ROE/CAVIAR",
+      str_detect(pp_dscp, "SHUCKED") ~ "SHUCKED",
+      str_detect(pp_dscp, "PEELED") ~ "PEELED",
+      str_detect(pp_dscp, "HEADLESS") ~ "HEADLESS",
+      str_detect(pp_dscp, "SECTIONS") ~ "SECTIONS",
+      str_detect(pp_dscp, "WHOLE") ~ "WHOLE",
+      str_detect(pp_dscp, "(CAN)") ~ "CANNED",
+      str_detect(pp_dscp, "STEAKS") ~ "STEAKS",
+      str_detect(pp_dscp, "SMOKED") ~ "SMOKED",
+      str_detect(pp_dscp, "OIL") ~ "OIL",
+      TRUE ~ "OTHER"
+    ),
+    
+    # General species
+    species = case_when(
+      str_detect(pp_dscp, "ALBACORE") ~ "ALBACORE",
+      str_detect(pp_dscp, "YELLOWFIN") ~ "YELLOWFIN",
+      str_detect(pp_dscp, "SKIPJACK") ~ "SKIPJACK",
+      str_detect(pp_dscp, "BIGEYE") ~ "BIGEYE",
+      str_detect(pp_dscp, "BLUEFIN") ~ "BLUEFIN",
+      str_detect(pp_dscp, "SALMON") ~ "SALMON",
+      str_detect(pp_dscp, "HAKE|WHITING") ~ "HAKE",
+      str_detect(pp_dscp, "WAHOO") ~ "WAHOO",
+      str_detect(pp_dscp, "CRAB") ~ "CRAB",
+      str_detect(pp_dscp, "HALIBUT") ~ "HALIBUT",
+      str_detect(pp_dscp, "SABLEFISH") ~ "SABLEFISH",
+      str_detect(pp_dscp, "SQUID") ~ "SQUID",
+      str_detect(pp_dscp, "SHRIMP") ~ "SHRIMP",
+      str_detect(pp_dscp, "BONITO") ~ "BONITO",
+      str_detect(pp_dscp, "COD") ~ "COD",
+      str_detect(pp_dscp, "CUCUMBER") ~ "SEA CUCUMBER",
+      str_detect(pp_dscp, "FLOUNDER") ~ "FLOUNDER",
+      str_detect(pp_dscp, "POLLOCK") ~ "POLLOCK",
+      str_detect(pp_dscp, "PERCH|ROCKFISH|THORNYHEAD") ~ "ROCKFISH",
+      str_detect(pp_dscp, "TROUT") ~ "TROUT",
+      str_detect(pp_dscp, "CLAM|GEODUCK") ~ "CLAMS",
+      str_detect(pp_dscp, "OYSTER") ~ "OYSTERS",
+      str_detect(pp_dscp, "SWORD") ~ "SWORDFISH",
+      str_detect(pp_dscp, "DRUM") ~ "DRUM",
+      str_detect(pp_dscp, "TILAPIA") ~ "TILAPIA",
+      str_detect(pp_dscp, "BASS") ~ "BASS",
+      str_detect(pp_dscp, "GROUPER") ~ "GROUPER",
+      str_detect(pp_dscp, "MARLIN") ~ "MARLIN",
+      str_detect(pp_dscp, "ESCOLAR") ~ "ESCOLAR",
+      str_detect(pp_dscp, "OCTOPUS") ~ "OCTOPUS",
+      str_detect(pp_dscp, "BUFFALO") ~ "BUFFALOFISH",
+      str_detect(pp_dscp, "STURGEON") ~ "STURGEON",
+      str_detect(pp_dscp, "MUSSEL") ~ "MUSSELS",
+      str_detect(pp_dscp, "SKATE") ~ "SKATES",
+      str_detect(pp_dscp, "LOBSTER") ~ "LOBSTER",
+      str_detect(pp_dscp, "DOLPHIN") ~ "DORADO",
+      str_detect(pp_dscp, "OPAH") ~ "OPAH",
+      str_detect(pp_dscp, "ANGLER") ~ "ANGLER",
+      str_detect(pp_dscp, "ROUGHY") ~ "ORANGE ROUGHY",
+      str_detect(pp_dscp, "CRAW") ~ "CRAWFISH",
+      str_detect(pp_dscp, "SMELT") ~ "SMELT",
+      str_detect(pp_dscp, "JACK") ~ "JACK",
+      str_detect(pp_dscp, "SARDINE") ~ "SARDINE",
+      str_detect(pp_dscp, "SEAWEED") ~ "SEAWEED",
+      str_detect(pp_dscp, "HERRING") ~ "HERRING",
+      str_detect(pp_dscp, "MACKEREL") ~ "MACKEREL",
+      str_detect(pp_dscp, "SCALLOP") ~ "SCALLOPS",
+      str_detect(pp_dscp, "SOLE") ~ "SOLE",
+      str_detect(pp_dscp, "PRAWN") ~ "PRAWN",
+      str_detect(pp_dscp, "TUNA") ~ "TUNA",
+      str_detect(pp_dscp, "UNCL") ~ "UNCLASSIFIED",
+      TRUE ~ "OTHER"
+    )
+  )
+```
+
+# Processor county analysis
+
+```{r}
+
+# Contiguous US state only
+non_contiguous <- c("AK", "HI", "AS", "GU", "MP", "PR", "UM", "VI")
+
+contiguous_fips <- fips_codes %>%
+  distinct(state, state_code) %>%
+  filter(!state %in% non_contiguous) %>%
+  pull(state_code)
+
+coastal_counties_conus <- coastal_counties %>%
+  filter(statefp %in% contiguous_fips)
+
+# Convert processors to sf and keep only contiguous US points
+processors_sf <- processors %>%
+  filter(
+    !is.na(latitude),
+    !is.na(longitude),
+    between(longitude, -125, -66),
+    between(latitude, 24, 50)
+  ) %>%
+  st_as_sf(
+    coords = c("longitude", "latitude"),
+    crs = 4326,
+    remove = FALSE
+  ) %>%
+  st_transform(crs_conus)
+
+# Assign a county to each processor
+processors_county <- st_join(
+  processors_sf,
+  coastal_counties_conus,
+  join = st_within
+)
+
+# Processors outside coastal counties
+message(
+  sum(is.na(processors_county$geoid)),
+  " processors did not fall within a coastal county"
+)
+
+
+
+county_lookup <- coastal_counties_conus %>%
+  st_drop_geometry() %>%
+  select(geoid, namelsad, statefp) %>%
+  left_join(
+    fips_codes %>% distinct(state, state_code),
+    by = c("statefp" = "state_code")
+  ) %>%
+  select(geoid, county = namelsad, state)
+
+processor_counts <- processors_county %>%
+  st_drop_geometry() %>%
+  filter(!is.na(geoid)) %>%
+  count(geoid, name = "n_processors") %>%
+  left_join(county_lookup, by = "geoid") %>%
+  select(geoid, county, state, n_processors) %>%
+  arrange(desc(n_processors))
+
+county_counts <- coastal_counties_conus %>%
+  left_join(select(processor_counts, geoid, n_processors), by = "geoid") %>%
+  mutate(n_processors = replace_na(n_processors, 0))
+```
+
+# Map - Coastal Counties and Active Processors
+
+```{r}
+# Flag whether each processor landed inside a coastal county
+processors_flagged <- processors_county %>%
+  mutate(
+    in_coastal = factor(
+      if_else(is.na(geoid), "Outside coastal county", "In coastal county"),
+      levels = c("In coastal county", "Outside coastal county")
+    )
+  ) %>%
+  arrange(is.na(geoid)) 
+
+# State outlines
+states_conus <- states(cb = TRUE) %>%
+  filter(!STUSPS %in% non_contiguous) %>%
+  st_transform(crs_conus)
+
+# Bounding box for contiguous US
+conus_box <- st_bbox(
+  c(xmin = -125, xmax = -66, ymin = 24, ymax = 50),
+  crs = st_crs(4326)
+) %>%
+  st_as_sfc() %>%
+  st_segmentize(units::set_units(50, km)) %>%
+  st_transform(crs_conus)
+
+# Crop states to the box
+states_conus <- st_intersection(states_conus, conus_box)
+```
+
+```{r}
+ggplot() +
+  geom_sf(
+    data = st_boundary(states_conus),
+    color = "grey75",
+    linewidth = 0.2
+  ) +
+  geom_sf(
+    data = coastal_counties_conus,
+    fill = NA,
+    color = "steelblue4",
+    linewidth = 0.35
+  ) +
+  geom_sf(
+    data = processors_flagged,
+    aes(color = in_coastal),
+    size = 0.8,
+    alpha = 0.9
+  ) +
+  scale_color_manual(
+    values = c(
+      "In coastal county"      = "#D73027",
+      "Outside coastal county" = "black"
+    ),
+    name = NULL
+  ) +
+  labs(
+    title = "Active Seafood Processors in Coastal Counties (2024)"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", size = 16)
+  )
+```
+
+# Choropleth of processor counts
+
+```{r}
+ggplot() +
+  geom_sf(
+    data = st_boundary(states_conus),
+    color = "grey75",
+    linewidth = 0.2
+  ) +
+   geom_sf(
+    data = county_counts,
+    aes(fill = if_else(n_processors == 0, NA_real_, n_processors)),
+    color = "white",
+    linewidth = 0.1
+  ) +
+  scale_fill_viridis_c(
+    option = "mako",
+    direction = -1,
+    na.value = "grey85",
+    name = "Processors"
+  ) +
+  labs(
+    title = "Active Seafood Processors per Coastal County (2024)"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", size = 16)
+  )
+```
+
+
+```{r}
+# Number of processors inside/outside coastal counties
+n_coastal <- processors_county %>%
+  filter(!is.na(geoid)) %>%
+  nrow()
+
+n_noncoastal <- processors_county %>%
+  filter(is.na(geoid)) %>%
+  nrow()
+
+cat("### Processor Summary\n\n")
+cat("Number of processors in coastal counties: ", n_coastal, "\n\n")
+cat("Number of processors outside coastal counties: ", n_noncoastal, "\n\n")
+
+kable(
+  processor_counts,
+  col.names = c("GEOID", "County", "State", "Processors"),
+  caption = "Number of Active Seafood Processors by Coastal County"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+
+
+# Product Analysis
+```{r}
+# Join product descriptions onto 2024 product data
+products_24_named <- products_24 %>%
+  left_join(
+    product_names %>%
+      select(
+        pp_code,
+        pp_dscp,
+        type,
+        species
+      ),
+    by = "pp_code"
+  )
+
+# Attach county GEOID to each processor's product records
+products_county <- products_24_named %>%
+  left_join(
+    processors_county %>%
+      st_drop_geometry() %>%
+      mutate(pp_idnum = as.character(pp_idnum)) %>%
+      select(pp_idnum, geoid),
+    by = "pp_idnum"
+  ) %>%
+  filter(!is.na(geoid))
+
+# Summarize pounds by county and product
+county_products <- products_county %>%
+  group_by(geoid, pp_code, pp_dscp) %>%
+  summarise(
+    pounds = sum(pounds, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Get top 3 products in each county based on pounds
+top_3_products <- county_products %>%
+  group_by(geoid) %>%
+  arrange(desc(pounds), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    product_rank = row_number()
+  ) %>%
+  ungroup()
+
+# Put top 3 products into separate columns
+top_3_products_text <- top_3_products %>%
+  mutate(
+    product = paste0(
+      pp_dscp,
+      " (",
+      scales::comma(round(pounds)),
+      " lbs)"
+    )
+  ) %>%
+  select(geoid, product_rank, product) %>%
+  pivot_wider(
+    names_from = product_rank,
+    values_from = product,
+    names_prefix = "product_"
+  )
+
+# Combine processor counts with top products
+county_summary <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_products_text,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("product_"),
+      ~replace_na(.x, "No product data")
+    )
+  )
+
+
+# Make table of top products
+county_table <- county_summary %>%
+  select(
+    county,
+    state,
+    n_processors,
+    product_1,
+    product_2,
+    product_3
+  )
+
+kable(
+  county_table,
+  col.names = c(
+    "County",
+    "State",
+    "Processors",
+    "Top Product",
+    "2nd Product",
+    "3rd Product"
+  ),
+  caption = "Coastal Counties with Three or More Active Seafood Processors, 2024"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed"
+    )
+  )
+```
+
+
+
+# Top Products Map
+```{r}
+# County polygons for interactive map
+county_map <- coastal_counties_conus %>%
+  left_join(
+    county_summary %>%
+      select(
+        geoid,
+        county,
+        state,
+        n_processors,
+        product_1,
+        product_2,
+        product_3
+      ),
+    by = "geoid"
+  ) %>%
+  filter(!is.na(n_processors)) %>%
+  st_transform(4326)
+
+# Color scale based on number of processors
+pal <- colorNumeric(
+  palette = viridis(100, direction = -1),
+  domain = county_map$n_processors,
+  na.color = "transparent"
+)
+```
+
+
+```{r}
+leaflet(county_map) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  
+  addPolygons(
+    fillColor = ~pal(n_processors),
+    fillOpacity = 0.75,
+    color = "white",
+    weight = 0.7,
+    
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#333333",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    
+    # Hover info
+    label = ~paste0(
+      county, ", ", state,
+      " | Processors: ", n_processors,
+      " | Top products: ",
+      product_1, "; ",
+      product_2, "; ",
+      product_3
+    ) %>%
+      lapply(htmltools::HTML),
+    
+    # Click info
+    popup = ~paste0(
+      "<strong>", county, ", ", state, "</strong><br><br>",
+      "<strong>Active processors:</strong> ", n_processors,
+      "<br><br>",
+      "<strong>Top products:</strong><br>",
+      "1. ", product_1, "<br>",
+      "2. ", product_2, "<br>",
+      "3. ", product_3
+    )
+  ) %>%
+  
+  addLegend(
+    pal = pal,
+    values = ~n_processors,
+    title = "Active Processors",
+    position = "bottomright"
+  )
+```
+
+
+
+### types by county
+```{r}
+county_types <- products_county %>%
+  group_by(geoid, type) %>%
+  summarise(
+    pounds = sum(pounds, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+top_3_types <- county_types %>%
+  group_by(geoid) %>%
+  arrange(desc(pounds), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    type_rank = row_number()
+  ) %>%
+  ungroup()
+
+top_3_types_wide <- top_3_types %>%
+  mutate(
+    type_label = paste0(
+      type,
+      " (",
+      scales::comma(round(pounds)),
+      " lbs)"
+    )
+  ) %>%
+  select(geoid, type_rank, type_label) %>%
+  pivot_wider(
+    names_from = type_rank,
+    values_from = type_label,
+    names_prefix = "type_"
+  )
+
+county_type_summary <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_types_wide,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("type_"),
+      ~replace_na(.x, "No data")
+    )
+  )
+```
+
+
+### Species by county
+```{r}
+county_species <- products_county %>%
+  group_by(geoid, species) %>%
+  summarise(
+    pounds = sum(pounds, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+top_3_species <- county_species %>%
+  group_by(geoid) %>%
+  arrange(desc(pounds), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    species_rank = row_number()
+  ) %>%
+  ungroup()
+
+top_3_species_wide <- top_3_species %>%
+  mutate(
+    species_label = paste0(
+      species,
+      " (",
+      scales::comma(round(pounds)),
+      " lbs)"
+    )
+  ) %>%
+  select(geoid, species_rank, species_label) %>%
+  pivot_wider(
+    names_from = species_rank,
+    values_from = species_label,
+    names_prefix = "species_"
+  )
+
+county_species_summary <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_species_wide,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("species_"),
+      ~replace_na(.x, "No data")
+    )
+  )
+```
+
+## Tables
+```{r}
+county_type_table <- county_type_summary %>%
+  select(
+    county,
+    state,
+    n_processors,
+    type_1,
+    type_2,
+    type_3
+  )
+
+kable(
+  county_type_table,
+  col.names = c(
+    "County",
+    "State",
+    "Processors",
+    "Top Type",
+    "2nd Type",
+    "3rd Type"
+  ),
+  caption = "Top Processing Types by Coastal County, 2024"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed"
+    )
+  )
+
+# Top species
+county_species_table <- county_species_summary %>%
+  select(
+    county,
+    state,
+    n_processors,
+    species_1,
+    species_2,
+    species_3
+  )
+
+kable(
+  county_species_table,
+  col.names = c(
+    "County",
+    "State",
+    "Processors",
+    "Top Species",
+    "2nd Species",
+    "3rd Species"
+  ),
+  caption = "Top Species by Coastal County, 2024"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed"
+    )
+  )
+```
+
+## Maps
+```{r}
+# Type map
+county_type_map <- coastal_counties_conus %>%
+  left_join(
+    county_type_summary %>%
+      select(
+        geoid,
+        county,
+        state,
+        n_processors,
+        type_1,
+        type_2,
+        type_3
+      ),
+    by = "geoid"
+  ) %>%
+  filter(!is.na(n_processors)) %>%
+  st_transform(4326)
+
+pal_type <- colorNumeric(
+  palette = rev(viridis(100)),
+  domain = county_type_map$n_processors,
+  na.color = "transparent"
+)
+
+leaflet(county_type_map) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    fillColor = ~pal_type(n_processors),
+    fillOpacity = 0.75,
+    color = "white",
+    weight = 0.7,
+    
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#333333",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    
+    label = ~paste0(
+      county, ", ", state,
+      " | Processors: ", n_processors
+    ) %>%
+      lapply(htmltools::HTML),
+    
+    popup = ~paste0(
+      "<strong>", county, ", ", state, "</strong><br><br>",
+      "<strong>Active processors:</strong> ", n_processors,
+      "<br><br>",
+      "<strong>Top processing types:</strong><br>",
+      "1. ", type_1, "<br>",
+      "2. ", type_2, "<br>",
+      "3. ", type_3
+    )
+  ) %>%
+  addLegend(
+    pal = pal_type,
+    values = ~n_processors,
+    title = "Active Processors",
+    position = "bottomright"
+  )
+
+
+# Species map
+county_species_map <- coastal_counties_conus %>%
+  left_join(
+    county_species_summary %>%
+      select(
+        geoid,
+        county,
+        state,
+        n_processors,
+        species_1,
+        species_2,
+        species_3
+      ),
+    by = "geoid"
+  ) %>%
+  filter(!is.na(n_processors)) %>%
+  st_transform(4326)
+
+pal_species <- colorNumeric(
+  palette = rev(viridis(100)),
+  domain = county_species_map$n_processors,
+  na.color = "transparent"
+)
+
+leaflet(county_species_map) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    fillColor = ~pal_species(n_processors),
+    fillOpacity = 0.75,
+    color = "white",
+    weight = 0.7,
+    
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#333333",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    
+    label = ~paste0(
+      county, ", ", state,
+      " | Processors: ", n_processors
+    ) %>%
+      lapply(htmltools::HTML),
+    
+    popup = ~paste0(
+      "<strong>", county, ", ", state, "</strong><br><br>",
+      "<strong>Active processors:</strong> ", n_processors,
+      "<br><br>",
+      "<strong>Top species:</strong><br>",
+      "1. ", species_1, "<br>",
+      "2. ", species_2, "<br>",
+      "3. ", species_3
+    )
+  ) %>%
+  addLegend(
+    pal = pal_species,
+    values = ~n_processors,
+    title = "Active Processors",
+    position = "bottomright"
+  )
+```
+

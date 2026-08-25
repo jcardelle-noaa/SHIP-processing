@@ -1,0 +1,294 @@
+---
+title: "Data Cleaning - plants by state"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+# Raw data
+
+### Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(here)
+library(readxl)
+library(janitor)
+library(readr)
+library(purrr)
+library(zipcodeR)
+library(tidygeocoder)
+```
+
+### Data
+```{r}
+# 2024 information
+address_24 <- read_excel(here("data/raw/pp_2024/pp_address__1.xlsx")) %>% clean_names()
+
+pp_24 <- read_excel(here("data/raw/pp_2024/pp_names__1.xlsx")) %>% clean_names()
+```
+
+
+
+# 2024 Active States
+
+## Geocode zips
+processors listed as active IN 2024 DATA
+```{r}
+# Filter to active processors
+active_processors_24 <- address_24 %>%
+  filter(status == "A")
+
+print(unique(active_processors_24$plant_state_abrv))
+
+write_csv(active_processors_24, here("data/cleaned/states-2024/active-processors-2024.csv"))
+
+# Make file for each state with active processors
+active_processors_24 %>%
+  split(.$plant_state_abrv) %>%
+  iwalk(~ write_csv(
+    .x,
+    here(
+      "data",
+      "cleaned",
+      "states-2024",
+      paste0((.y), ".csv")
+  )))
+
+
+# Get all state files
+active_state_files <- list.files(
+  here("data","cleaned", "states-2024"),
+  pattern = "\\.csv$",
+  full.names = TRUE
+)
+
+# Collect all unique ZIP codes across all files
+active_zips <- map_dfr(
+  active_state_files,
+  ~ read_csv(.x, show_col_types = FALSE) %>%
+      transmute(
+        plant_zip = str_pad(
+          as.character(plant_zip),
+          width = 5,
+          pad = "0"
+        )
+      )
+) %>%
+  filter(!is.na(plant_zip), plant_zip != "") %>%
+  distinct()
+
+# Geocode each ZIP once
+active_zip_geo <- geocode_zip(active_zips$plant_zip)
+
+# Process each state file
+process_active_state_file <- function(file, active_zip_geo) {
+
+  dat <- read_csv(file, show_col_types = FALSE) %>%
+    mutate(
+      plant_zip = str_pad(
+        as.character(plant_zip),
+        width = 5,
+        pad = "0"
+      )
+    )
+
+  dat_geo <- dat %>%
+    left_join(
+      active_zip_geo,
+      by = c("plant_zip" = "zipcode")
+    )
+
+  output_file <- here(
+    "data",
+    "cleaned",
+    "states-2024-zipgeo",
+    paste0(
+      tools::file_path_sans_ext(basename(file)),
+      "-zipgeo.csv"
+    )
+  )
+
+  write_csv(dat_geo, output_file)
+
+  message("Finished: ", basename(file))
+}
+
+# Run for all states
+walk(
+  active_state_files,
+  process_active_state_file,
+  active_zip_geo = active_zip_geo
+)
+```
+
+
+
+## Geocode full address
+```{r}
+# Read in (or create) geocode cache
+cache_file <- here("data", "cleaned", "geocode_cache.csv")
+
+if (file.exists(cache_file)) {
+  geocode_cache <- read_csv(cache_file, show_col_types = FALSE)
+} else {
+  geocode_cache <- tibble(
+    full_address = character(),
+    latitude = double(),
+    longitude = double()
+  )
+}
+
+
+# Get all active state files
+active_state_files <- list.files(
+  here("data", "cleaned", "states-2024"),
+  pattern = "\\.csv$",
+  full.names = TRUE
+)
+
+# Function to process one file
+process_active_state_file_street <- function(file) {
+
+  dat <- read_csv(file, show_col_types = FALSE) %>%
+    mutate(
+      plant_zip = str_pad(as.character(plant_zip), 5, pad = "0"),
+      full_address = paste(
+        plant_street,
+        plant_city,
+        plant_state_abrv,
+        plant_zip,
+        sep = ", "
+      ),
+      full_address = na_if(full_address, "NA, NA, NA, NA")
+    )
+
+  # Find addresses not already cached
+  new_addresses <- dat %>%
+    distinct(full_address) %>%
+    filter(!is.na(full_address)) %>%
+    anti_join(geocode_cache, by = "full_address")
+
+  # Geocode only new addresses
+  if (nrow(new_addresses) > 0) {
+
+    message("Geocoding ", nrow(new_addresses), " new addresses...")
+
+    new_addresses <- new_addresses %>%
+      geocode(
+        address = full_address,
+        method = "osm",
+        lat = latitude,
+        long = longitude
+      )
+
+    # Add new results to cache
+    geocode_cache <<- bind_rows(
+      geocode_cache,
+      new_addresses
+    ) %>%
+      distinct(full_address, .keep_all = TRUE)
+
+    # Save updated cache
+    write_csv(geocode_cache, cache_file)
+  }
+
+  # Join cached coordinates back
+  dat_geo <- dat %>%
+    left_join(
+      geocode_cache,
+      by = "full_address"
+    )
+
+  # Write output
+  output_file <- here(
+    "data",
+    "cleaned",
+    "states-2024-streetgeo",
+    paste0(
+      tools::file_path_sans_ext(basename(file)),
+      "-streetgeo.csv"
+    )
+  )
+
+  write_csv(dat_geo, output_file)
+
+  message("Finished: ", basename(file))
+}
+
+# Run for all files
+walk(
+  active_state_files,
+  process_active_state_file_street
+)
+```
+
+# Fix NAs
+```{r}
+# Manually went through an put correct addresses into geocode_cache.csv
+# Read in 2024
+processors_street <- read_csv(here("data/cleaned/states-2024-streetgeo/active-processors-2024-streetgeo.csv"))
+
+
+# Create CSV with rows with NAs in lat and lon
+missing_processors <- processors_street %>%
+  filter(is.na(latitude) | is.na(longitude))
+
+write_csv(
+  missing_processors,
+  here("data","cleaned", "processors_missing.csv")
+)
+```
+ 
+```{r}
+# Read in manually geocoded file
+missing_processors_fixed <- read_csv(
+  here("data/cleaned/processors_missing_geocodes.csv")
+)
+
+# Fill in only missing coordinates
+processors_street <- processors_street %>%
+  left_join(
+    missing_processors_fixed %>%
+      select(
+        pp_idnum,
+        latitude_new = latitude,
+        longitude_new = longitude
+      ),
+    by = "pp_idnum"
+  ) %>%
+  mutate(
+    latitude = coalesce(latitude, latitude_new),
+    longitude = coalesce(longitude, longitude_new)
+  ) %>%
+  select(-latitude_new, -longitude_new)
+
+# Save updated dataset
+write_csv(
+  processors_street,
+  here("data/cleaned/states-2024-streetgeo/active-processors-2024-streetgeo.csv")
+)
+
+# update geocache
+geocode_cache <- read_csv(
+  here("data/cleaned/geocode_cache.csv")
+)
+
+geocode_cache <- geocode_cache %>%
+  left_join(
+    missing_processors_fixed %>%
+      select(full_address, latitude_new = latitude, longitude_new = longitude),
+    by = "full_address"
+  ) %>%
+  mutate(
+    latitude = coalesce(latitude, latitude_new),
+    longitude = coalesce(longitude, longitude_new)
+  ) %>%
+  select(-latitude_new, -longitude_new)
+
+write_csv(
+  geocode_cache,
+  here("data/cleaned/geocode_cache.csv")
+)
+```
+

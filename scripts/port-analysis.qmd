@@ -1,0 +1,58 @@
+---
+title: "Port Analysis"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+### Libraries
+
+```{r}
+library(tidyverse)   
+library(readxl)
+library(here)
+library(janitor)
+library(sf)
+library(viridis)
+library(tigris)
+
+options(tigris_use_cache = TRUE)
+```
+
+
+### Data
+```{r}
+# Read in state ports
+processors <- read_csv(
+  here("data/cleaned/states-2024-streetgeo/active-processors-2024-streetgeo.csv")
+)
+
+national_port_codes <- read_csv(here("data/raw/National_Port_Codes_Filtered_ENOW_Counties.csv")) %>% clean_names()
+```
+
+# Analysis
+```{r}
+# Clean processor ZIP codes
+processors <- processors %>%
+  mutate(
+    plant_zip = str_pad(as.character(plant_zip), 5, pad = "0")
+  )
+
+# Join processors to ports
+processors_ports <- processors %>%
+  left_join(
+    national_port_codes,
+    by = c("plant_zip" = "zip_code")
+  ) %>% 
+  filter(!is.na(port_name),
+         port_name != "--")
+
+port_counts <- processors_ports %>%
+  filter(!is.na(port_name)) %>%
+  count(port_name, sort = TRUE, name = "n_processors")
+
+port_counts
+```
+

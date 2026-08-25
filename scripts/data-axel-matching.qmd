@@ -1,0 +1,78 @@
+---
+title: "Processed Products - Data Axel"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+# Setup
+
+### Libraries
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+library(stringr)
+library(fuzzyjoin)
+```
+
+
+
+### Data
+```{r}
+data_axel <- read_csv(here("data/raw/2026-07-31-processor-us.csv")) %>% clean_names()
+pp <- read_csv(here("data/cleaned/states-2024-streetgeo/active-processors-2024-streetgeo.csv"))
+```
+
+
+# Fuzzy join
+
+## Clean company names
+```{r}
+# Remove punctuation, capitalization, common business suffixes
+clean_company <- function(x) {
+  x %>%
+    str_to_upper() %>%
+    str_replace_all("&", " AND ") %>%
+    str_replace_all("[[:punct:]]", " ") %>%
+    str_replace_all("\\b(INC|INCORPORATED|LLC|L L C|CORP|CORPORATION|CO|COMPANY|LTD|LIMITED)\\b", "") %>%
+    str_squish()
+}
+
+pp <- pp %>%
+  mutate(company_clean = clean_company(company))
+
+data_axel <- data_axel %>%
+  mutate(company_clean = clean_company(company_name))
+```
+
+
+## Fuzzy join
+```{r}
+matches <- stringdist_inner_join(
+  data_axel,
+  pp,
+  by = c("company_clean" = "company_clean"),
+  method = "jw",
+  max_dist = 0.1,
+  distance_col = "distance"
+)
+
+
+# Dataset for comparing
+match_compare <- matches %>%
+  transmute(
+    axel_company = company_name,
+    pp_company = company,
+    axel_address = address,
+    axel_zip = zip.x,
+    pp_full_address = full_address,
+    pp_idnum
+  )
+```
+
+```{r}
+write_csv(match_compare, here("data/cleaned/data-axel/data-axel-pp-compare.csv"))
+```
+
