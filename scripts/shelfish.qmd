@@ -35,7 +35,7 @@ shellfish <- read_csv(here("data/raw/Interstate_Shellfish_Shipper-States.csv")) 
 
 # Geocode Shellfish
 ```{r}
-# Add lat and long columns based on city and state
+# Add lat and long columns to unique city/state combinations
 locations <- shellfish %>%
   mutate(
     city = str_squish(city),
@@ -50,7 +50,7 @@ locations <- shellfish %>%
     long = longitude
   )
 
-
+# join lat long columns back to companies
 shellfish_geo <- shellfish %>%
   mutate(
     city = str_squish(city),
@@ -62,5 +62,11 @@ shellfish_geo <- shellfish %>%
     by = c("city", "state")
   )
 
+```
+
+
+```{r}
+# Save as csv file
+write.csv(shellfish_geo, here("data/cleaned/shellfish_geo.csv"))
 ```
 
