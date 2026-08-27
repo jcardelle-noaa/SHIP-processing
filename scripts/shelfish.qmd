@@ -1,0 +1,66 @@
+---
+title: "Interstate Shellfish Shipper"
+date: last-modified
+execute: 
+  warning: false
+  message: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    toc: true
+editor_options: 
+  
+  chunk_output_type: console
+---
+
+# Setup
+
+### Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(janitor)
+library(here)
+library(tidygeocoder)
+```
+
+
+### Data
+```{r}
+shellfish <- read_csv(here("data/raw/Interstate_Shellfish_Shipper-States.csv")) %>% clean_names()
+```
+
+
+
+# Geocode Shellfish
+```{r}
+# Add lat and long columns based on city and state
+locations <- shellfish %>%
+  mutate(
+    city = str_squish(city),
+    state = str_squish(state),
+    address = paste(city, state, sep = ", ")
+  ) %>%
+  distinct(city, state, address) %>%
+  geocode(
+    address = address,
+    method = "arcgis",
+    lat = latitude,
+    long = longitude
+  )
+
+
+shellfish_geo <- shellfish %>%
+  mutate(
+    city = str_squish(city),
+    state = str_squish(state)
+  ) %>%
+  left_join(
+    locations %>%
+      select(city, state, latitude, longitude),
+    by = c("city", "state")
+  )
+
+```
+
