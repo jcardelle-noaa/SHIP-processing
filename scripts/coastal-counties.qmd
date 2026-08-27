@@ -213,7 +213,7 @@ county_counts <- coastal_counties_conus %>%
   mutate(n_processors = replace_na(n_processors, 0))
 ```
 
-# Map - Coastal Counties and Active Processors
+## Coastal Counties and Active Processors Map
 
 ```{r}
 # Flag whether each processor landed inside a coastal county
@@ -279,7 +279,7 @@ ggplot() +
   )
 ```
 
-# Choropleth of processor counts
+## Processor Counts map
 
 ```{r}
 ggplot() +
@@ -337,7 +337,9 @@ kable(
 
 
 
-# Product Analysis
+# Product Analysis - Poundage
+
+### Specific Product by Poundage
 ```{r}
 # Join product descriptions onto 2024 product data
 products_24_named <- products_24 %>%
@@ -447,8 +449,6 @@ kable(
 ```
 
 
-
-# Top Products Map
 ```{r}
 # County polygons for interactive map
 county_map <- coastal_counties_conus %>%
@@ -527,7 +527,7 @@ leaflet(county_map) %>%
 
 
 
-### types by county
+
 ```{r}
 county_types <- products_county %>%
   group_by(geoid, type) %>%
@@ -576,55 +576,7 @@ county_type_summary <- processor_counts %>%
 ```
 
 
-### Species by county
-```{r}
-county_species <- products_county %>%
-  group_by(geoid, species) %>%
-  summarise(
-    pounds = sum(pounds, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-top_3_species <- county_species %>%
-  group_by(geoid) %>%
-  arrange(desc(pounds), .by_group = TRUE) %>%
-  slice_head(n = 3) %>%
-  mutate(
-    species_rank = row_number()
-  ) %>%
-  ungroup()
-
-top_3_species_wide <- top_3_species %>%
-  mutate(
-    species_label = paste0(
-      species,
-      " (",
-      scales::comma(round(pounds)),
-      " lbs)"
-    )
-  ) %>%
-  select(geoid, species_rank, species_label) %>%
-  pivot_wider(
-    names_from = species_rank,
-    values_from = species_label,
-    names_prefix = "species_"
-  )
-
-county_species_summary <- processor_counts %>%
-  filter(n_processors >= 3) %>%
-  left_join(
-    top_3_species_wide,
-    by = "geoid"
-  ) %>%
-  mutate(
-    across(
-      starts_with("species_"),
-      ~replace_na(.x, "No data")
-    )
-  )
-```
-
-## Tables
+### Product Type by Poundage
 ```{r}
 county_type_table <- county_type_summary %>%
   select(
@@ -656,41 +608,9 @@ kable(
       "condensed"
     )
   )
-
-# Top species
-county_species_table <- county_species_summary %>%
-  select(
-    county,
-    state,
-    n_processors,
-    species_1,
-    species_2,
-    species_3
-  )
-
-kable(
-  county_species_table,
-  col.names = c(
-    "County",
-    "State",
-    "Processors",
-    "Top Species",
-    "2nd Species",
-    "3rd Species"
-  ),
-  caption = "Top Species by Coastal County, 2024"
-) %>%
-  kable_styling(
-    full_width = FALSE,
-    bootstrap_options = c(
-      "striped",
-      "hover",
-      "condensed"
-    )
-  )
 ```
 
-## Maps
+
 ```{r}
 # Type map
 county_type_map <- coastal_counties_conus %>%
@@ -753,8 +673,94 @@ leaflet(county_type_map) %>%
     title = "Active Processors",
     position = "bottomright"
   )
+```
 
 
+### Species by Poundage
+```{r}
+county_species <- products_county %>%
+  group_by(geoid, species) %>%
+  summarise(
+    pounds = sum(pounds, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+top_3_species <- county_species %>%
+  group_by(geoid) %>%
+  arrange(desc(pounds), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    species_rank = row_number()
+  ) %>%
+  ungroup()
+
+top_3_species_wide <- top_3_species %>%
+  mutate(
+    species_label = paste0(
+      species,
+      " (",
+      scales::comma(round(pounds)),
+      " lbs)"
+    )
+  ) %>%
+  select(geoid, species_rank, species_label) %>%
+  pivot_wider(
+    names_from = species_rank,
+    values_from = species_label,
+    names_prefix = "species_"
+  )
+
+county_species_summary <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_species_wide,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("species_"),
+      ~replace_na(.x, "No data")
+    )
+  )
+```
+
+
+
+```{r}
+# Top species
+county_species_table <- county_species_summary %>%
+  select(
+    county,
+    state,
+    n_processors,
+    species_1,
+    species_2,
+    species_3
+  )
+
+kable(
+  county_species_table,
+  col.names = c(
+    "County",
+    "State",
+    "Processors",
+    "Top Species",
+    "2nd Species",
+    "3rd Species"
+  ),
+  caption = "Top Species by Coastal County, 2024"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed"
+    )
+  )
+```
+
+```{r}
 # Species map
 county_species_map <- coastal_counties_conus %>%
   left_join(
@@ -815,6 +821,196 @@ leaflet(county_species_map) %>%
     values = ~n_processors,
     title = "Active Processors",
     position = "bottomright"
+  )
+```
+
+
+
+# Product Analysis - Revenue
+
+### Specific Product by Revenue
+```{r}
+# Summarize dollars by county and product
+county_products_revenue <- products_county %>%
+  group_by(geoid, pp_code, pp_dscp) %>%
+  summarise(
+    dollars = sum(dollars, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Get top 3 products in each county based on dollars
+top_3_products_revenue <- county_products_revenue %>%
+  group_by(geoid) %>%
+  arrange(desc(dollars), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    product_rank = row_number()
+  ) %>%
+  ungroup()
+
+# Put top 3 products into separate columns
+top_3_products_revenue_text <- top_3_products_revenue %>%
+  mutate(
+    product = paste0(
+      pp_dscp,
+      " ($",
+      scales::comma(round(dollars)),
+      ")"
+    )
+  ) %>%
+  select(geoid, product_rank, product) %>%
+  pivot_wider(
+    names_from = product_rank,
+    values_from = product,
+    names_prefix = "product_"
+  )
+
+# Combine processor counts with top products
+county_summary_revenue <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_products_revenue_text,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("product_"),
+      ~replace_na(.x, "No product data")
+    )
+  )
+
+# Make revenue table
+county_table_revenue <- county_summary_revenue %>%
+  select(
+    county,
+    state,
+    n_processors,
+    product_1,
+    product_2,
+    product_3
+  )
+
+kable(
+  county_table_revenue,
+  col.names = c(
+    "County",
+    "State",
+    "Processors",
+    "Top Product",
+    "2nd Product",
+    "3rd Product"
+  ),
+  caption = "Top Products by Revenue in Coastal Counties with Three or More Active Seafood Processors, 2024"
+) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed"
+    )
+  )
+```
+
+### Product Type by Revenue
+```{r}
+### Types by county - Revenue
+
+county_types_revenue <- products_county %>%
+  group_by(geoid, type) %>%
+  summarise(
+    dollars = sum(dollars, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+top_3_types_revenue <- county_types_revenue %>%
+  group_by(geoid) %>%
+  arrange(desc(dollars), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    type_rank = row_number()
+  ) %>%
+  ungroup()
+
+top_3_types_revenue_wide <- top_3_types_revenue %>%
+  mutate(
+    type_label = paste0(
+      type,
+      " ($",
+      scales::comma(round(dollars)),
+      ")"
+    )
+  ) %>%
+  select(geoid, type_rank, type_label) %>%
+  pivot_wider(
+    names_from = type_rank,
+    values_from = type_label,
+    names_prefix = "type_"
+  )
+
+county_type_summary_revenue <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_types_revenue_wide,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("type_"),
+      ~replace_na(.x, "No data")
+    )
+  )
+```
+
+
+
+### Species by Revenue
+```{r}
+### Species by county - Revenue
+
+county_species_revenue <- products_county %>%
+  group_by(geoid, species) %>%
+  summarise(
+    dollars = sum(dollars, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+top_3_species_revenue <- county_species_revenue %>%
+  group_by(geoid) %>%
+  arrange(desc(dollars), .by_group = TRUE) %>%
+  slice_head(n = 3) %>%
+  mutate(
+    species_rank = row_number()
+  ) %>%
+  ungroup()
+
+top_3_species_revenue_wide <- top_3_species_revenue %>%
+  mutate(
+    species_label = paste0(
+      species,
+      " ($",
+      scales::comma(round(dollars)),
+      ")"
+    )
+  ) %>%
+  select(geoid, species_rank, species_label) %>%
+  pivot_wider(
+    names_from = species_rank,
+    values_from = species_label,
+    names_prefix = "species_"
+  )
+
+county_species_summary_revenue <- processor_counts %>%
+  filter(n_processors >= 3) %>%
+  left_join(
+    top_3_species_revenue_wide,
+    by = "geoid"
+  ) %>%
+  mutate(
+    across(
+      starts_with("species_"),
+      ~replace_na(.x, "No data")
+    )
   )
 ```
 
