@@ -26,6 +26,10 @@ library(tidygeocoder)
 address_24 <- read_excel(here("data/raw/pp_2024/pp_address__1.xlsx")) %>% clean_names()
 
 pp_24 <- read_excel(here("data/raw/pp_2024/pp_names__1.xlsx")) %>% clean_names()
+
+products <- read_excel(here("data/raw/pp_2024/PPS1999to2024.xlsx")) %>% clean_names()
+  
+
 ```
 
 
@@ -290,5 +294,137 @@ write_csv(
   geocode_cache,
   here("data/cleaned/geocode_cache.csv")
 )
+```
+
+
+
+
+
+
+# Extend to past 10 years
+```{r}
+# Extend to past 10 years
+products_14 <- products %>%
+  filter(year >= 2014)
+
+# Get unique processors that have product records since 2014
+processors_14 <- products_14 %>%
+  distinct(pp_idnum)
+
+processors_14_address <- processors_14 %>%
+  left_join(
+    address_24,
+    by = "pp_idnum"
+  ) %>%
+  mutate(
+    plant_zip = str_pad(
+      as.character(plant_zip),
+      width = 5,
+      pad = "0"
+    ),
+    full_address = paste(
+      plant_street,
+      plant_city,
+      plant_state_abrv,
+      plant_zip,
+      sep = ", "
+    ),
+    full_address = na_if(
+      full_address,
+      "NA, NA, NA, NA"
+    )
+  )
+
+
+# Check for processors with no address information
+processors_14_address %>%
+  filter(is.na(full_address)) %>%
+  select(pp_idnum)
+
+
+# How many processors have product information since 2014?
+nrow(processors_14)
+
+# How many have an address?
+processors_14_address %>%
+  summarise(
+    processors = n(),
+    with_address = sum(!is.na(full_address)),
+    without_address = sum(is.na(full_address))
+  )
+
+
+geocode_cache <- read_csv(
+  here("data/cleaned/geocode_cache.csv"),
+  show_col_types = FALSE
+)
+
+
+
+new_addresses <- processors_14_address %>%
+  distinct(full_address) %>%
+  filter(!is.na(full_address)) %>%
+  anti_join(
+    geocode_cache,
+    by = "full_address"
+  )
+
+nrow(new_addresses)
+
+
+if (nrow(new_addresses) > 0) {
+
+  message(
+    "Geocoding ",
+    nrow(new_addresses),
+    " new addresses..."
+  )
+
+  new_addresses <- new_addresses %>%
+    geocode(
+      address = full_address,
+      method = "osm",
+      lat = latitude,
+      long = longitude
+    )
+
+  # Add new results to cache
+  geocode_cache <- bind_rows(
+    geocode_cache,
+    new_addresses
+  ) %>%
+    distinct(full_address, .keep_all = TRUE)
+
+  # Save updated cache
+  write_csv(
+    geocode_cache,
+    here("data", "cleaned", "geocode_cache.csv")
+  )
+}
+
+
+processors_14_geocoded <- processors_14_address %>%
+  left_join(
+    geocode_cache %>%
+      select(
+        full_address,
+        latitude,
+        longitude
+      ),
+    by = "full_address"
+  )
+
+
+
+write_csv(
+  processors_14_geocoded,
+  here(
+    "data",
+    "cleaned",
+    "processors-2014-2024-geocoded.csv"
+  )
+)
+
+
 ```
 

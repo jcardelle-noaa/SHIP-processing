@@ -68,5 +68,7 @@ shellfish_geo <- shellfish %>%
 ```{r}
 # Save as csv file
 write.csv(shellfish_geo, here("data/cleaned/shellfish_geo.csv"))
+
+shellfish_geo <- read_csv(here("data/cleaned/shellfish_geo.csv"))
 ```
 

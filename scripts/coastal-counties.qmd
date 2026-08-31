@@ -60,15 +60,99 @@ products_24 <- read_excel(here("data/raw/pp_2024/PPS1999to2024.xlsx")) %>%
 
 
 products <- read_excel(here("data/raw/pp_2024/pp_names__1.xlsx")) %>% clean_names() 
+
+
 ```
 
 
 ```{r}
+# product_names <- products %>%
+#   clean_names() %>%
+#   mutate(
+#     
+#     # Product processing type
+#     type = case_when(
+#       str_detect(pp_dscp, "FILLET") ~ "FILLET",
+#       str_detect(pp_dscp, "SURIMI") ~ "SURIMI",
+#       str_detect(pp_dscp, "BREADED") ~ "BREADED",
+#       str_detect(pp_dscp, "DRESSED") ~ "DRESSED",
+#       str_detect(pp_dscp, "CANNED") ~ "CANNED",
+#       str_detect(pp_dscp, "ROE|CAVIAR") ~ "ROE/CAVIAR",
+#       str_detect(pp_dscp, "SHUCKED") ~ "SHUCKED",
+#       str_detect(pp_dscp, "PEELED") ~ "PEELED",
+#       str_detect(pp_dscp, "HEADLESS") ~ "HEADLESS",
+#       str_detect(pp_dscp, "SECTIONS") ~ "SECTIONS",
+#       str_detect(pp_dscp, "WHOLE") ~ "WHOLE",
+#       str_detect(pp_dscp, "(CAN)") ~ "CANNED",
+#       str_detect(pp_dscp, "STEAKS") ~ "STEAKS",
+#       str_detect(pp_dscp, "SMOKED") ~ "SMOKED",
+#       str_detect(pp_dscp, "OIL") ~ "OIL",
+#       TRUE ~ "OTHER"
+#     ),
+#     
+#     # General species
+#     species = case_when(
+#       str_detect(pp_dscp, "ALBACORE") ~ "ALBACORE",
+#       str_detect(pp_dscp, "YELLOWFIN") ~ "YELLOWFIN",
+#       str_detect(pp_dscp, "SKIPJACK") ~ "SKIPJACK",
+#       str_detect(pp_dscp, "BIGEYE") ~ "BIGEYE",
+#       str_detect(pp_dscp, "BLUEFIN") ~ "BLUEFIN",
+#       str_detect(pp_dscp, "SALMON") ~ "SALMON",
+#       str_detect(pp_dscp, "HAKE|WHITING") ~ "HAKE",
+#       str_detect(pp_dscp, "WAHOO") ~ "WAHOO",
+#       str_detect(pp_dscp, "CRAB") ~ "CRAB",
+#       str_detect(pp_dscp, "HALIBUT") ~ "HALIBUT",
+#       str_detect(pp_dscp, "SABLEFISH") ~ "SABLEFISH",
+#       str_detect(pp_dscp, "SQUID") ~ "SQUID",
+#       str_detect(pp_dscp, "SHRIMP") ~ "SHRIMP",
+#       str_detect(pp_dscp, "BONITO") ~ "BONITO",
+#       str_detect(pp_dscp, "COD") ~ "COD",
+#       str_detect(pp_dscp, "CUCUMBER") ~ "SEA CUCUMBER",
+#       str_detect(pp_dscp, "FLOUNDER") ~ "FLOUNDER",
+#       str_detect(pp_dscp, "POLLOCK") ~ "POLLOCK",
+#       str_detect(pp_dscp, "PERCH|ROCKFISH|THORNYHEAD") ~ "ROCKFISH",
+#       str_detect(pp_dscp, "TROUT") ~ "TROUT",
+#       str_detect(pp_dscp, "CLAM|GEODUCK") ~ "CLAMS",
+#       str_detect(pp_dscp, "OYSTER") ~ "OYSTERS",
+#       str_detect(pp_dscp, "SWORD") ~ "SWORDFISH",
+#       str_detect(pp_dscp, "DRUM") ~ "DRUM",
+#       str_detect(pp_dscp, "TILAPIA") ~ "TILAPIA",
+#       str_detect(pp_dscp, "BASS") ~ "BASS",
+#       str_detect(pp_dscp, "GROUPER") ~ "GROUPER",
+#       str_detect(pp_dscp, "MARLIN") ~ "MARLIN",
+#       str_detect(pp_dscp, "ESCOLAR") ~ "ESCOLAR",
+#       str_detect(pp_dscp, "OCTOPUS") ~ "OCTOPUS",
+#       str_detect(pp_dscp, "BUFFALO") ~ "BUFFALOFISH",
+#       str_detect(pp_dscp, "STURGEON") ~ "STURGEON",
+#       str_detect(pp_dscp, "MUSSEL") ~ "MUSSELS",
+#       str_detect(pp_dscp, "SKATE") ~ "SKATES",
+#       str_detect(pp_dscp, "LOBSTER") ~ "LOBSTER",
+#       str_detect(pp_dscp, "DOLPHIN") ~ "DORADO",
+#       str_detect(pp_dscp, "OPAH") ~ "OPAH",
+#       str_detect(pp_dscp, "ANGLER") ~ "ANGLER",
+#       str_detect(pp_dscp, "ROUGHY") ~ "ORANGE ROUGHY",
+#       str_detect(pp_dscp, "CRAW") ~ "CRAWFISH",
+#       str_detect(pp_dscp, "SMELT") ~ "SMELT",
+#       str_detect(pp_dscp, "JACK") ~ "JACK",
+#       str_detect(pp_dscp, "SARDINE") ~ "SARDINE",
+#       str_detect(pp_dscp, "SEAWEED") ~ "SEAWEED",
+#       str_detect(pp_dscp, "HERRING") ~ "HERRING",
+#       str_detect(pp_dscp, "MACKEREL") ~ "MACKEREL",
+#       str_detect(pp_dscp, "SCALLOP") ~ "SCALLOPS",
+#       str_detect(pp_dscp, "SOLE") ~ "SOLE",
+#       str_detect(pp_dscp, "PRAWN") ~ "PRAWN",
+#       str_detect(pp_dscp, "TUNA") ~ "TUNA",
+#       str_detect(pp_dscp, "UNCL") ~ "UNCLASSIFIED",
+#       TRUE ~ "OTHER"
+#     )
+#   )
+
+# Make columns for type and species
 product_names <- products %>%
   clean_names() %>%
   mutate(
     
-    # Product processing type
+    # First classify type based on pp_dscp
     type = case_when(
       str_detect(pp_dscp, "FILLET") ~ "FILLET",
       str_detect(pp_dscp, "SURIMI") ~ "SURIMI",
@@ -81,14 +165,38 @@ product_names <- products %>%
       str_detect(pp_dscp, "HEADLESS") ~ "HEADLESS",
       str_detect(pp_dscp, "SECTIONS") ~ "SECTIONS",
       str_detect(pp_dscp, "WHOLE") ~ "WHOLE",
+      str_detect(pp_dscp, "BAIT") ~ "BAIT",
       str_detect(pp_dscp, "(CAN)") ~ "CANNED",
       str_detect(pp_dscp, "STEAKS") ~ "STEAKS",
       str_detect(pp_dscp, "SMOKED") ~ "SMOKED",
-      str_detect(pp_dscp, "OIL") ~ "OIL",
       TRUE ~ "OTHER"
     ),
     
-    # General species
+    # If type is still OTHER, check group_name
+    type = if_else(
+      type == "OTHER",
+      case_when(
+        str_detect(group_name, "FILLET") ~ "FILLET",
+        str_detect(group_name, "SURIMI") ~ "SURIMI",
+        str_detect(group_name, "BREADED") ~ "BREADED",
+        str_detect(group_name, "DRESSED") ~ "DRESSED",
+        str_detect(group_name, "CANNED") ~ "CANNED",
+        str_detect(group_name, "ROE|CAVIAR") ~ "ROE/CAVIAR",
+        str_detect(group_name, "SHUCKED") ~ "SHUCKED",
+        str_detect(group_name, "PEELED") ~ "PEELED",
+        str_detect(group_name, "HEADLESS") ~ "HEADLESS",
+        str_detect(group_name, "SECTIONS") ~ "SECTIONS",
+        str_detect(group_name, "WHOLE") ~ "WHOLE",
+        str_detect(pp_dscp, "BAIT") ~ "BAIT",
+        str_detect(group_name, "(CAN)") ~ "CANNED",
+        str_detect(group_name, "STEAKS") ~ "STEAKS",
+        str_detect(group_name, "SMOKED") ~ "SMOKED",
+        TRUE ~ "OTHER"
+      ),
+      type
+    ),
+    
+    # Species classification
     species = case_when(
       str_detect(pp_dscp, "ALBACORE") ~ "ALBACORE",
       str_detect(pp_dscp, "YELLOWFIN") ~ "YELLOWFIN",
@@ -139,6 +247,7 @@ product_names <- products %>%
       str_detect(pp_dscp, "SCALLOP") ~ "SCALLOPS",
       str_detect(pp_dscp, "SOLE") ~ "SOLE",
       str_detect(pp_dscp, "PRAWN") ~ "PRAWN",
+      str_detect(pp_dscp, "ANCHOVY") ~ "ANCHOVY",      
       str_detect(pp_dscp, "TUNA") ~ "TUNA",
       str_detect(pp_dscp, "UNCL") ~ "UNCLASSIFIED",
       TRUE ~ "OTHER"

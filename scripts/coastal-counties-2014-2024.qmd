@@ -1,0 +1,523 @@
+---
+title: "2014 - 2024 Processors Coastal Counties"
+date: last-modified
+execute: 
+  warning: false
+  message: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    toc: true
+editor_options: 
+  
+  chunk_output_type: console
+---
+
+
+# Setup
+
+### Libraries
+```{r}
+library(tidyverse)
+library(here)
+library(janitor)
+library(sf)
+library(tigris)
+library(kableExtra)
+library(knitr)
+library(readxl)
+
+options(tigris_use_cache = TRUE)
+```
+
+### Data
+```{r}
+# Projection for the contiguous U.S.
+crs_conus <- "ESRI:102003"
+
+
+# Geocoded processors
+processors <- read_csv(
+  here(
+    "data",
+    "cleaned",
+    "processors-2014-2024-geocoded.csv"
+  ),
+  show_col_types = FALSE
+) %>%
+  mutate(
+    pp_idnum = as.character(pp_idnum)
+  )
+
+
+
+# Coastal counties
+coastal_counties <- st_read(
+  here("data/raw/coastal_counties/enow_counties.shp")
+) %>%
+  clean_names() %>%
+  mutate(
+    geoid = str_pad(as.character(geoid), 5, pad = "0"),
+    statefp = str_pad(as.character(statefp), 2, pad = "0")
+  ) %>%
+  st_transform(crs_conus)
+
+
+# Product data
+products <- read_excel(
+  here("data/raw/pp_2024/PPS1999to2024.xlsx")
+) %>%
+  clean_names() %>%
+  filter(year >= 2014)
+```
+
+
+
+```{r}
+# Make columns for type and species
+product_names <- read_excel(
+  here("data/raw/pp_2024/pp_names__1.xlsx")
+) %>%
+  clean_names() %>%
+  mutate(
+    
+    # First classify type based on pp_dscp
+    type = case_when(
+      str_detect(pp_dscp, "FILLET") ~ "FILLET",
+      str_detect(pp_dscp, "SURIMI") ~ "SURIMI",
+      str_detect(pp_dscp, "BREADED") ~ "BREADED",
+      str_detect(pp_dscp, "DRESSED") ~ "DRESSED",
+      str_detect(pp_dscp, "CANNED") ~ "CANNED",
+      str_detect(pp_dscp, "ROE|CAVIAR") ~ "ROE/CAVIAR",
+      str_detect(pp_dscp, "SHUCKED") ~ "SHUCKED",
+      str_detect(pp_dscp, "PEELED") ~ "PEELED",
+      str_detect(pp_dscp, "HEADLESS") ~ "HEADLESS",
+      str_detect(pp_dscp, "SECTIONS") ~ "SECTIONS",
+      str_detect(pp_dscp, "WHOLE") ~ "WHOLE",
+      str_detect(pp_dscp, "BAIT") ~ "BAIT",
+      str_detect(pp_dscp, "(CAN)") ~ "CANNED",
+      str_detect(pp_dscp, "STEAKS") ~ "STEAKS",
+      str_detect(pp_dscp, "SMOKED") ~ "SMOKED",
+      TRUE ~ "OTHER"
+    ),
+    
+    # If type is still OTHER, check group_name
+    type = if_else(
+      type == "OTHER",
+      case_when(
+        str_detect(group_name, "FILLET") ~ "FILLET",
+        str_detect(group_name, "SURIMI") ~ "SURIMI",
+        str_detect(group_name, "BREADED") ~ "BREADED",
+        str_detect(group_name, "DRESSED") ~ "DRESSED",
+        str_detect(group_name, "CANNED") ~ "CANNED",
+        str_detect(group_name, "ROE|CAVIAR") ~ "ROE/CAVIAR",
+        str_detect(group_name, "SHUCKED") ~ "SHUCKED",
+        str_detect(group_name, "PEELED") ~ "PEELED",
+        str_detect(group_name, "HEADLESS") ~ "HEADLESS",
+        str_detect(group_name, "SECTIONS") ~ "SECTIONS",
+        str_detect(group_name, "WHOLE") ~ "WHOLE",
+        str_detect(pp_dscp, "BAIT") ~ "BAIT",
+        str_detect(group_name, "(CAN)") ~ "CANNED",
+        str_detect(group_name, "STEAKS") ~ "STEAKS",
+        str_detect(group_name, "SMOKED") ~ "SMOKED",
+        TRUE ~ "OTHER"
+      ),
+      type
+    ),
+    
+    # Species classification
+    species = case_when(
+      str_detect(pp_dscp, "ALBACORE") ~ "ALBACORE",
+      str_detect(pp_dscp, "YELLOWFIN") ~ "YELLOWFIN",
+      str_detect(pp_dscp, "SKIPJACK") ~ "SKIPJACK",
+      str_detect(pp_dscp, "BIGEYE") ~ "BIGEYE",
+      str_detect(pp_dscp, "BLUEFIN") ~ "BLUEFIN",
+      str_detect(pp_dscp, "SALMON") ~ "SALMON",
+      str_detect(pp_dscp, "HAKE|WHITING") ~ "HAKE",
+      str_detect(pp_dscp, "WAHOO") ~ "WAHOO",
+      str_detect(pp_dscp, "CRAB") ~ "CRAB",
+      str_detect(pp_dscp, "HALIBUT") ~ "HALIBUT",
+      str_detect(pp_dscp, "SABLEFISH") ~ "SABLEFISH",
+      str_detect(pp_dscp, "SQUID") ~ "SQUID",
+      str_detect(pp_dscp, "SHRIMP") ~ "SHRIMP",
+      str_detect(pp_dscp, "BONITO") ~ "BONITO",
+      str_detect(pp_dscp, "COD") ~ "COD",
+      str_detect(pp_dscp, "CUCUMBER") ~ "SEA CUCUMBER",
+      str_detect(pp_dscp, "FLOUNDER") ~ "FLOUNDER",
+      str_detect(pp_dscp, "POLLOCK") ~ "POLLOCK",
+      str_detect(pp_dscp, "PERCH|ROCKFISH|THORNYHEAD") ~ "ROCKFISH",
+      str_detect(pp_dscp, "TROUT") ~ "TROUT",
+      str_detect(pp_dscp, "CLAM|GEODUCK") ~ "CLAMS",
+      str_detect(pp_dscp, "OYSTER") ~ "OYSTERS",
+      str_detect(pp_dscp, "SWORD") ~ "SWORDFISH",
+      str_detect(pp_dscp, "DRUM") ~ "DRUM",
+      str_detect(pp_dscp, "TILAPIA") ~ "TILAPIA",
+      str_detect(pp_dscp, "BASS") ~ "BASS",
+      str_detect(pp_dscp, "GROUPER") ~ "GROUPER",
+      str_detect(pp_dscp, "MARLIN") ~ "MARLIN",
+      str_detect(pp_dscp, "ESCOLAR") ~ "ESCOLAR",
+      str_detect(pp_dscp, "OCTOPUS") ~ "OCTOPUS",
+      str_detect(pp_dscp, "BUFFALO") ~ "BUFFALOFISH",
+      str_detect(pp_dscp, "STURGEON") ~ "STURGEON",
+      str_detect(pp_dscp, "MUSSEL") ~ "MUSSELS",
+      str_detect(pp_dscp, "SKATE") ~ "SKATES",
+      str_detect(pp_dscp, "LOBSTER") ~ "LOBSTER",
+      str_detect(pp_dscp, "DOLPHIN") ~ "DORADO",
+      str_detect(pp_dscp, "OPAH") ~ "OPAH",
+      str_detect(pp_dscp, "ANGLER") ~ "ANGLER",
+      str_detect(pp_dscp, "ROUGHY") ~ "ORANGE ROUGHY",
+      str_detect(pp_dscp, "CRAW") ~ "CRAWFISH",
+      str_detect(pp_dscp, "SMELT") ~ "SMELT",
+      str_detect(pp_dscp, "JACK") ~ "JACK",
+      str_detect(pp_dscp, "SARDINE") ~ "SARDINE",
+      str_detect(pp_dscp, "SEAWEED") ~ "SEAWEED",
+      str_detect(pp_dscp, "HERRING") ~ "HERRING",
+      str_detect(pp_dscp, "MACKEREL") ~ "MACKEREL",
+      str_detect(pp_dscp, "SCALLOP") ~ "SCALLOPS",
+      str_detect(pp_dscp, "SOLE") ~ "SOLE",
+      str_detect(pp_dscp, "PRAWN") ~ "PRAWN",
+      str_detect(pp_dscp, "ANCHOVY") ~ "ANCHOVY",      
+      str_detect(pp_dscp, "TUNA") ~ "TUNA",
+      str_detect(pp_dscp, "UNCL") ~ "UNCLASSIFIED",
+      TRUE ~ "OTHER"
+    )
+  )
+```
+
+
+
+
+
+```{r}
+# Contiguous US only
+non_contiguous <- c(
+  "AK", "HI", "AS", "GU", "MP", "PR", "UM", "VI"
+)
+
+contiguous_fips <- fips_codes %>%
+  distinct(state, state_code) %>%
+  filter(!state %in% non_contiguous) %>%
+  pull(state_code)
+
+coastal_counties_conus <- coastal_counties %>%
+  filter(statefp %in% contiguous_fips)
+
+
+# County lookup
+county_lookup <- coastal_counties_conus %>%
+  st_drop_geometry() %>%
+  select(geoid, namelsad, statefp) %>%
+  left_join(
+    fips_codes %>%
+      distinct(state, state_code),
+    by = c("statefp" = "state_code")
+  ) %>%
+  select(
+    geoid,
+    county = namelsad,
+    state
+  )
+```
+
+
+
+```{r}
+make_county_tables <- function(target_year) {
+  
+  message("Processing ", target_year, "...")
+  
+  
+  # Products for this year
+  products_year <- products %>%
+    filter(year == target_year) %>%
+    left_join(
+      product_names %>%
+        select(
+          pp_code,
+          pp_dscp,
+          type,
+          species
+        ),
+      by = "pp_code"
+    )
+  
+  
+  # Processors that had products this year
+  processors_year <- products_year %>%
+    distinct(pp_idnum) %>%
+    left_join(
+      processors,
+      by = "pp_idnum"
+    )
+  
+  
+  # Convert processors to sf
+  processors_sf <- processors_year %>%
+    filter(
+      !is.na(latitude),
+      !is.na(longitude),
+      between(longitude, -125, -66),
+      between(latitude, 24, 50)
+    ) %>%
+    st_as_sf(
+      coords = c("longitude", "latitude"),
+      crs = 4326,
+      remove = FALSE
+    ) %>%
+    st_transform(crs_conus)
+  
+  
+  # Assign processor to coastal county
+  processors_county <- st_join(
+    processors_sf,
+    coastal_counties_conus,
+    join = st_within
+  )
+  
+  
+  # Processor counts
+  processor_counts <- processors_county %>%
+    st_drop_geometry() %>%
+    filter(!is.na(geoid)) %>%
+    count(
+      geoid,
+      name = "n_processors"
+    ) %>%
+    left_join(
+      county_lookup,
+      by = "geoid"
+    ) %>%
+    select(
+      geoid,
+      county,
+      state,
+      n_processors
+    )
+  
+  
+  # Attach county to product records
+  products_county <- products_year %>%
+    left_join(
+      processors_county %>%
+        st_drop_geometry() %>%
+        select(pp_idnum, geoid),
+      by = "pp_idnum"
+    ) %>%
+    filter(!is.na(geoid))
+  
+  
+  # --------------------------------------------------
+  # TABLE 1: TOP PRODUCTS BY POUNDAGE
+  # --------------------------------------------------
+  
+  top_products <- products_county %>%
+    group_by(
+      geoid,
+      pp_code,
+      pp_dscp
+    ) %>%
+    summarise(
+      pounds = sum(pounds, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(pounds),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        pp_dscp,
+        " (",
+        scales::comma(round(pounds)),
+        " lbs)"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "product_"
+    )
+  
+  
+  county_product_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_products,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("product_"),
+        ~ replace_na(.x, "No product data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      product_1,
+      product_2,
+      product_3
+    )
+  
+  
+  # --------------------------------------------------
+  # TABLE 2: TOP PROCESSING TYPES BY POUNDAGE
+  # --------------------------------------------------
+  
+  top_types <- products_county %>%
+    group_by(
+      geoid,
+      type
+    ) %>%
+    summarise(
+      pounds = sum(pounds, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(pounds),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        type,
+        " (",
+        scales::comma(round(pounds)),
+        " lbs)"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "type_"
+    )
+  
+  
+  county_type_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_types,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("type_"),
+        ~ replace_na(.x, "No data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      type_1,
+      type_2,
+      type_3
+    )
+  
+  
+  # --------------------------------------------------
+  # TABLE 3: TOP SPECIES BY POUNDAGE
+  # --------------------------------------------------
+  
+  top_species <- products_county %>%
+    group_by(
+      geoid,
+      species
+    ) %>%
+    summarise(
+      pounds = sum(pounds, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(pounds),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        species,
+        " (",
+        scales::comma(round(pounds)),
+        " lbs)"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "species_"
+    )
+  
+  
+  county_species_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_species,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("species_"),
+        ~ replace_na(.x, "No data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      species_1,
+      species_2,
+      species_3
+    )
+  
+  
+  # Return all three tables
+  list(
+    products = county_product_table,
+    types = county_type_table,
+    species = county_species_table
+  )
+}
+```
+
+
+
+```{r}
+county_tables <- map(
+  2014:2024,
+  make_county_tables
+)
+
+names(county_tables) <- 2014:2024
+
+
+#2014 product table
+county_tables[["2014"]]$products
+```
+
