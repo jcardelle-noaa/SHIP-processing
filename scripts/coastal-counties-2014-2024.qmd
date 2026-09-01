@@ -516,7 +516,6 @@ names(county_tables) <- 2014:2024
 make_county_tables_revenue <- function(target_year) {
   
   message("Processing revenue tables for ", target_year)
-  c
   # Products for this year
   products_year <- products %>%
     filter(year == target_year) %>%
