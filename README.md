@@ -13,11 +13,11 @@ human capital (e.g., fishing crews and processing workers in the seafood sector)
 |└── README.md
 |└── ship-processing.Rproj
 |└── scripts
-|  └── coastal-counties.qmd     # Analysis of coastal counties
-|  └── data-axel-matching.qmd   # Matches data axel and processed products data based on company name
-|  └── data-cleaning.qmd        # Cleans and geocodes processed products data (should be run first)
-|  └── port-analysis.qmd        # Analysis of port groups
-|└── scripts
+|  └── coastal-counties.qmd             # Analysis of coastal counties with 2024 active processors
+|  └── data-axel-matching.qmd           # Matches data axel and processed products data based on company name
+|  └── data-cleaning.qmd                # Cleans and geocodes processed products data (should be run first)
+|  └── port-analysis.qmd                # Analysis of port groups
+|  └── coastal-counties-2014-2024.qmd   # Extends coastal county analysis to past 10 years of data
 |└── .gitignore  
 |  └── data/
 ```
