@@ -73,7 +73,7 @@ products <- read_excel(
 ```
 
 
-
+### Add Species and Type columns
 ```{r}
 # Make columns for type and species
 product_names <- read_excel(
@@ -188,7 +188,7 @@ product_names <- read_excel(
 
 
 
-
+# Top Products by Poudage
 ```{r}
 # Contiguous US only
 non_contiguous <- c(
@@ -225,7 +225,7 @@ county_lookup <- coastal_counties_conus %>%
 ```{r}
 make_county_tables <- function(target_year) {
   
-  message("Processing ", target_year, "...")
+  message("Processing ", target_year)
   
   
   # Products for this year
@@ -307,10 +307,8 @@ make_county_tables <- function(target_year) {
     filter(!is.na(geoid))
   
   
-  # --------------------------------------------------
-  # TABLE 1: TOP PRODUCTS BY POUNDAGE
-  # --------------------------------------------------
-  
+
+  # Table 1 - top products by poundage
   top_products <- products_county %>%
     group_by(
       geoid,
@@ -371,10 +369,7 @@ make_county_tables <- function(target_year) {
     )
   
   
-  # --------------------------------------------------
-  # TABLE 2: TOP PROCESSING TYPES BY POUNDAGE
-  # --------------------------------------------------
-  
+  # TAable 2 - top type by poundage
   top_types <- products_county %>%
     group_by(
       geoid,
@@ -434,10 +429,7 @@ make_county_tables <- function(target_year) {
     )
   
   
-  # --------------------------------------------------
-  # TABLE 3: TOP SPECIES BY POUNDAGE
-  # --------------------------------------------------
-  
+  # Table 3 - top species by poundage
   top_species <- products_county %>%
     group_by(
       geoid,
@@ -515,9 +507,304 @@ county_tables <- map(
 )
 
 names(county_tables) <- 2014:2024
+```
 
 
-#2014 product table
+
+# Top products by Revenue
+```{r}
+make_county_tables_revenue <- function(target_year) {
+  
+  message("Processing revenue tables for ", target_year)
+  c
+  # Products for this year
+  products_year <- products %>%
+    filter(year == target_year) %>%
+    left_join(
+      product_names %>%
+        select(
+          pp_code,
+          pp_dscp,
+          type,
+          species
+        ),
+      by = "pp_code"
+    )
+  
+  # Processors that had products this year
+  processors_year <- products_year %>%
+    distinct(pp_idnum) %>%
+    left_join(
+      processors,
+      by = "pp_idnum"
+    )
+  
+  processors_sf <- processors_year %>%
+    filter(
+      !is.na(latitude),
+      !is.na(longitude),
+      between(longitude, -125, -66),
+      between(latitude, 24, 50)
+    ) %>%
+    st_as_sf(
+      coords = c("longitude", "latitude"),
+      crs = 4326,
+      remove = FALSE
+    ) %>%
+    st_transform(crs_conus)
+  
+  # Assign processor to coastal county
+  processors_county <- st_join(
+    processors_sf,
+    coastal_counties_conus,
+    join = st_within
+  )
+  
+  # Processor counts
+  processor_counts <- processors_county %>%
+    st_drop_geometry() %>%
+    filter(!is.na(geoid)) %>%
+    count(
+      geoid,
+      name = "n_processors"
+    ) %>%
+    left_join(
+      county_lookup,
+      by = "geoid"
+    ) %>%
+    select(
+      geoid,
+      county,
+      state,
+      n_processors
+    )
+  
+  # Join with county
+  products_county <- products_year %>%
+    left_join(
+      processors_county %>%
+        st_drop_geometry() %>%
+        select(pp_idnum, geoid),
+      by = "pp_idnum"
+    ) %>%
+    filter(!is.na(geoid))
+  
+  
+  # TAable 1 - top products by revenue
+  top_products <- products_county %>%
+    group_by(
+      geoid,
+      pp_code,
+      pp_dscp
+    ) %>%
+    summarise(
+      dollars = sum(dollars, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(dollars),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        pp_dscp,
+        " ($",
+        scales::comma(round(dollars)),
+        ")"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "product_"
+    )
+  
+  
+  county_product_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_products,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("product_"),
+        ~ replace_na(.x, "No product data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      product_1,
+      product_2,
+      product_3
+    )
+  
+  
+
+  # Table 2 - top types by revenue
+  top_types <- products_county %>%
+    group_by(
+      geoid,
+      type
+    ) %>%
+    summarise(
+      dollars = sum(dollars, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(dollars),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        type,
+        " ($",
+        scales::comma(round(dollars)),
+        ")"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "type_"
+    )
+  
+  
+  county_type_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_types,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("type_"),
+        ~ replace_na(.x, "No data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      type_1,
+      type_2,
+      type_3
+    )
+  
+  
+
+  # Table 3 - top speices by revenue
+  top_species <- products_county %>%
+    group_by(
+      geoid,
+      species
+    ) %>%
+    summarise(
+      dollars = sum(dollars, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(geoid) %>%
+    arrange(
+      desc(dollars),
+      .by_group = TRUE
+    ) %>%
+    slice_head(n = 3) %>%
+    mutate(
+      rank = row_number(),
+      label = paste0(
+        species,
+        " ($",
+        scales::comma(round(dollars)),
+        ")"
+      )
+    ) %>%
+    ungroup() %>%
+    select(
+      geoid,
+      rank,
+      label
+    ) %>%
+    pivot_wider(
+      names_from = rank,
+      values_from = label,
+      names_prefix = "species_"
+    )
+  
+  
+  county_species_table <- processor_counts %>%
+    filter(n_processors >= 3) %>%
+    left_join(
+      top_species,
+      by = "geoid"
+    ) %>%
+    mutate(
+      across(
+        starts_with("species_"),
+        ~ replace_na(.x, "No data")
+      )
+    ) %>%
+    select(
+      county,
+      state,
+      n_processors,
+      species_1,
+      species_2,
+      species_3
+    )
+  
+  
+  # Return three revenue tables
+  list(
+    products = county_product_table,
+    types = county_type_table,
+    species = county_species_table
+  )
+}
+```
+
+
+```{r}
+# Revenue tables for each year
+county_tables_revenue <- map(
+  2014:2024,
+  make_county_tables_revenue
+)
+
+names(county_tables_revenue) <- 2014:2024
+```
+
+
+# Access Tables individually
+```{r}
+# Example on how to access tables individually
+# Poundage based
 county_tables[["2014"]]$products
+county_tables[["2014"]]$types
+county_tables[["2014"]]$species
+
+# Revenue based
+county_tables_revenue[["2014"]]$products
+county_tables_revenue[["2014"]]$types
+county_tables_revenue[["2014"]]$species
 ```
 
